@@ -311,7 +311,7 @@ dialog h3{font:700 20px 'Cinzel Decorative',serif;color:var(--blood);margin-bott
 <script>
 (function(){
 'use strict';
-const KEY='grimorio-personagem-v1';
+const KEY = "grimorio_arcana_v1";
 const $=s=>document.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -938,7 +938,8 @@ render(true);
 })();
 </script>
 <script>
-  const DB_URL = atob("aHR0cHM6Ly9ncmltb3Jpby1hY2VydG9jcml0aWNvLWRlZmF1bHQtcnRkYi5maXJlYmFzZWlvLmNvbS9ncmltb3Jpb19lc3RhZG8uanNvbg==");
+  const DB_URL = atob("aHR0cHM6Ly9ncmltb3Jpby1hY2VydG9jcml0aWNvLWRlZmF1bHQtcnRkYi5maXJlYmFzZWlvLmNvbS8=") + "grimorio_arcana.json";
+  const CHAVE_DESTA_MESA = "grimorio_arcana_v1";
   let ultimoJsonEnviado = "";
   let bloqueado = false;
 
@@ -956,12 +957,10 @@ render(true);
 
       if (resposta.ok) {
         ultimoJsonEnviado = jsonAtual;
-        console.log("✅ Grimório salvo na nuvem com sucesso!");
-      } else {
-        console.error("❌ Erro HTTP ao salvar no Firebase:", resposta.status, await resposta.text());
+        console.log("✅ Grimório Arcana salvo na nuvem!");
       }
     } catch (erro) {
-      console.error("❌ Falha de conexão ao salvar no Firebase:", erro);
+      console.error("❌ Erro ao salvar no Firebase:", erro);
     }
   };
 
@@ -974,38 +973,20 @@ render(true);
       const dadosNuvem = await resposta.json();
       if (!dadosNuvem || !Array.isArray(dadosNuvem.chars)) return;
 
-      const jsonNuvem = JSON.stringify(dadosNuvem);
-      if (jsonNuvem === ultimoJsonEnviado) return;
-            const dadosNuvem = await resposta.json();
-      if (!dadosNuvem || !Array.isArray(dadosNuvem.chars)) return;
-
       dadosNuvem.chars.forEach(c => {
         if (!c.refs) c.refs = { items: [] };
         if (!Array.isArray(c.refs.items)) c.refs.items = [];
       });
 
-      let chaveLocal = Object.keys(localStorage).find(k => {
-        try {
-          const p = JSON.parse(localStorage.getItem(k));
-          return p && Array.isArray(p.chars);
-        } catch (e) {
-          return false;
-        }
-      });
+      const jsonNuvem = JSON.stringify(dadosNuvem);
+      if (jsonNuvem === ultimoJsonEnviado) return;
 
-      const valorLocal = chaveLocal ? localStorage.getItem(chaveLocal) : null;
+      const valorLocal = localStorage.getItem(CHAVE_DESTA_MESA);
 
       if (valorLocal !== jsonNuvem) {
         bloqueado = true;
         ultimoJsonEnviado = jsonNuvem;
-
-        if (chaveLocal) {
-          localStorage.setItem(chaveLocal, jsonNuvem);
-        } else {
-          localStorage.setItem("grimorio_backup", jsonNuvem);
-        }
-
-        console.log("🔄 Novos personagens encontrados na nuvem! Atualizando tela...");
+        localStorage.setItem(CHAVE_DESTA_MESA, jsonNuvem);
         location.reload();
       } else {
         ultimoJsonEnviado = jsonNuvem;
