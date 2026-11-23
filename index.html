@@ -311,7 +311,7 @@ dialog h3{font:700 20px 'Cinzel Decorative',serif;color:var(--blood);margin-bott
 <script>
 (function(){
 'use strict';
-const KEY = "grimorio_arcana_v1";
+const KEY = "grimorio_arcana_v2";
 const $=s=>document.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -938,8 +938,9 @@ render(true);
 })();
 </script>
 <script>
-  const DB_URL = atob("aHR0cHM6Ly9ncmltb3Jpby1hY2VydG9jcml0aWNvLWRlZmF1bHQtcnRkYi5maXJlYmFzZWlvLmNvbS8=") + "grimorio_arcana.json";
-  const CHAVE_DESTA_MESA = "grimorio_arcana_v1";
+  const NOME_SALA = "grimorio_arcana";
+  const DB_URL = atob("aHR0cHM6Ly9ncmltb3Jpby1hY2VydG9jcml0aWNvLWRlZmF1bHQtcnRkYi5maXJlYmFzZWlvLmNvbS8=") + NOME_SALA + ".json";
+  const CHAVE_DESTA_MESA = NOME_SALA + "_v2";
   let ultimoJsonEnviado = "";
   let bloqueado = false;
 
@@ -952,12 +953,12 @@ render(true);
       const resposta = await fetch(DB_URL, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: jsonAtual
+        body: JSON.stringify({ pacote: jsonAtual })
       });
 
       if (resposta.ok) {
         ultimoJsonEnviado = jsonAtual;
-        console.log("✅ Grimório Arcana salvo na nuvem!");
+        console.log("✅ " + NOME_SALA + " salvo na nuvem com todas as caixas intactas!");
       }
     } catch (erro) {
       console.error("❌ Erro ao salvar no Firebase:", erro);
@@ -971,14 +972,9 @@ render(true);
       if (!resposta.ok) return;
 
       const dadosNuvem = await resposta.json();
-      if (!dadosNuvem || !Array.isArray(dadosNuvem.chars)) return;
+      if (!dadosNuvem || typeof dadosNuvem.pacote !== "string") return;
 
-      dadosNuvem.chars.forEach(c => {
-        if (!c.refs) c.refs = { items: [] };
-        if (!Array.isArray(c.refs.items)) c.refs.items = [];
-      });
-
-      const jsonNuvem = JSON.stringify(dadosNuvem);
+      const jsonNuvem = dadosNuvem.pacote;
       if (jsonNuvem === ultimoJsonEnviado) return;
 
       const valorLocal = localStorage.getItem(CHAVE_DESTA_MESA);
