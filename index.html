@@ -209,6 +209,11 @@ dialog h3{font:700 20px 'Cinzel Decorative',serif;color:var(--blood);margin-bott
 .types b{display:block;color:var(--blood);font:700 14px 'Cinzel Decorative',serif}
 .types small{color:var(--muted);font-size:14px}
 #dlgShare,#dlgImport{max-width:min(660px,94vw)}
+#dlgPickImg{max-width:min(480px,94vw)}
+.paste-zone{border:2px dashed rgba(90,59,30,.55);border-radius:4px;padding:26px 18px;text-align:center;background:rgba(255,250,230,.4);cursor:pointer;transition:.2s;margin-bottom:12px;outline:none}
+.paste-zone:hover,.paste-zone:focus,.paste-zone.over{border-color:var(--blood);background:rgba(184,134,43,.22)}
+.paste-zone b{display:block;color:var(--blood);font:700 16px 'Cinzel Decorative',serif;margin-bottom:6px}
+.paste-zone small{color:var(--muted);font-size:14px;display:block}
 .lvls{display:grid;gap:6px;margin:8px 0 12px}
 .lvl{display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid rgba(90,59,30,.4);border-radius:3px;cursor:pointer;background:rgba(255,250,230,.35);transition:.2s}
 .lvl:hover{background:rgba(184,134,43,.2)}
@@ -272,6 +277,19 @@ dialog h3{font:700 20px 'Cinzel Decorative',serif;color:var(--blood);margin-bott
   <div style="text-align:right;margin-top:16px"><button class="btn" data-close>Fechar</button></div>
 </dialog>
 
+<dialog id="dlgPickImg">
+  <h3 id="pickImgTitle">Adicionar imagem</h3>
+  <div class="paste-zone" id="pasteZone" tabindex="0">
+    <b>Pressione Ctrl+V para colar uma imagem</b>
+    <small>ou arraste o arquivo para cá, ou clique para escolher do computador</small>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn primary" id="pickPasteBtn">Colar da área de transferência</button>
+    <button class="btn" id="pickFileBtn">Escolher arquivo…</button>
+    <button class="btn" data-close>Fechar</button>
+  </div>
+</dialog>
+
 <dialog id="dlgShare">
   <h3 id="shareTitle">Compartilhar personagem</h3>
   <p class="hint" style="margin:0 0 6px">Escolha o que enviar. O código é um bloco único de texto, sem quebras, que você cola em qualquer chat ou e-mail.</p>
@@ -302,6 +320,15 @@ dialog h3{font:700 20px 'Cinzel Decorative',serif;color:var(--blood);margin-bott
     <button class="btn" data-close>Fechar</button>
   </div>
   <input type="file" id="impFile" accept=".txt,.json,.rtf,.grimorio,text/*,application/json" hidden>
+</dialog>
+
+<dialog id="dlgConfirm">
+  <h3 id="confirmTitle">Confirmar exclusão</h3>
+  <p id="confirmMsg" style="margin:0 0 14px"></p>
+  <div class="dlg-actions">
+    <button class="btn" data-close>Cancelar</button>
+    <button class="btn primary" id="confirmOk">Excluir</button>
+  </div>
 </dialog>
 
 <dialog id="dlgImg" class="lightbox"><img id="bigImg" alt=""></dialog>
@@ -389,6 +416,17 @@ const getBox=id=>cur().boxes.find(b=>b.id===id);
 let tt;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2400)}
 
+window.__aplicarEstadoRemoto=function(novoEstado){
+  if(!novoEstado||!Array.isArray(novoEstado.chars)||!novoEstado.chars.length)return;
+  const prevTab=S.tab,prevCur=S.current;
+  const migrado=migrate(novoEstado);
+  if(migrado.chars.some(c=>c.id===prevCur))migrado.current=prevCur;
+  if(TAB_ORDER.includes(prevTab))migrado.tab=prevTab;
+  S=migrado;
+  try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+  render(false);
+};
+
 /* ---------- Ambiente (brasas) ---------- */
 (function(){
   const host=$('#embers');
@@ -447,7 +485,7 @@ function renderSection(animate){
   const c=cur(),s=SECS[S.tab];
   $('#page').innerHTML=`
     <header class="folio-head">
-      <div class="medal" data-act="portrait" title="Trocar retrato" style="${c.portrait?`background-image:url('${c.portrait}')`:''}">${c.portrait?'':'+<br>retrato'}</div>
+      <div class="medal" data-act="portrait" title="Trocar retrato (clique ou Ctrl+V)" style="${c.portrait?`background-image:url('${c.portrait}')`:''}">${c.portrait?'':'+<br>retrato'}</div>
       <div class="who">
         <input class="name" data-act="cname" value="${esc(c.name)}" placeholder="Nome do personagem" aria-label="Nome">
         <input class="role" data-act="crole" value="${esc(c.role)}" placeholder="Classe, título ou epíteto" aria-label="Título">
@@ -462,7 +500,7 @@ function renderSection(animate){
     <p class="sec-sub">${esc(s.sub)}</p>
     <div class="toolbar">
       <button class="btn primary" data-act="addbox">+ Nova caixa</button>
-      <span class="hint">Arraste pelo ⠿ · ◀ ▶ reordenam · ⇔ largura · ⇄ muda de página</span>
+      <span class="hint">Arraste pelo ⠿ · ◀ ▶ reordenam · ⇔ largura · ⇄ muda de página · Ctrl+V cola imagem</span>
     </div>
     <section class="board" id="board"></section>`;
   renderBoard(animate);
@@ -524,8 +562,8 @@ const BODY={
     </div>`).join('')}
     <button class="btn sm" data-act="qadd">+ item</button>`,
   refs:b=>`${b.data.items.length?`<div class="refs">${b.data.items.map((r,i)=>`
-    <div class="ref">
-      <div class="pic" data-act="refimg" data-i="${i}" title="Trocar imagem" style="${r.img?`background-image:url('${r.img}')`:''}">${r.img?'':'+ imagem'}</div>
+    <div class="ref" data-ref-i="${i}">
+      <div class="pic" data-act="refimg" data-i="${i}" title="Trocar imagem (clique ou Ctrl+V)" style="${r.img?`background-image:url('${r.img}')`:''}">${r.img?'':'+ imagem'}</div>
       <div class="f">
         <input data-act="rn" data-i="${i}" value="${esc(r.name)}" placeholder="Nome do personagem">
         <input data-act="rs" data-i="${i}" value="${esc(r.src)}" placeholder="Obra / origem">
@@ -552,25 +590,152 @@ function goTab(t){
   setTimeout(()=>{leaf.className='leaf';turning=false},1200);
 }
 
-/* ---------- Imagens ---------- */
-let pickCb=null;
-function pickImage(cb,max){pickCb=cb;const f=$('#filePick');f.dataset.max=max||600;f.value='';f.click()}
-$('#filePick').addEventListener('change',e=>{
-  const file=e.target.files&&e.target.files[0];if(!file||!pickCb)return;
-  const max=+e.target.dataset.max||600,rd=new FileReader();
+/* ---------- Imagens (arquivo, arrastar e Ctrl+V) ---------- */
+let pickCb=null,pickMax=600,lastHoverEl=null;
+document.addEventListener('pointerover',e=>{lastHoverEl=e.target});
+
+function processImageFile(file,max,cb){
+  if(!file||!cb)return;
+  const rd=new FileReader();
   rd.onload=()=>{
     const img=new Image();
     img.onload=()=>{
-      const k=Math.min(1,max/Math.max(img.width,img.height));
-      const cv=document.createElement('canvas');cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);
+      const k=Math.min(1,(max||600)/Math.max(img.width,img.height));
+      const cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.round(img.width*k));
+      cv.height=Math.max(1,Math.round(img.height*k));
       cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-      pickCb(cv.toDataURL('image/jpeg',.82));
+      cb(cv.toDataURL('image/jpeg',.82));
     };
     img.onerror=()=>toast('Não consegui ler essa imagem.');
     img.src=rd.result;
   };
   rd.readAsDataURL(file);
+}
+
+function pickImage(cb,max,title){
+  pickCb=cb;
+  pickMax=max||600;
+  $('#pickImgTitle').textContent=title||'Adicionar imagem';
+  $('#dlgPickImg').showModal();
+  setTimeout(()=>{const z=$('#pasteZone');if(z)z.focus()},40);
+}
+
+function finishPickImage(file,msg){
+  if(!file||!pickCb)return;
+  const cb=pickCb,max=pickMax;
+  processImageFile(file,max,dataUrl=>{
+    pickCb=null;
+    if($('#dlgPickImg').open)$('#dlgPickImg').close();
+    cb(dataUrl);
+    if(msg)toast(msg);
+  });
+}
+
+$('#dlgPickImg').addEventListener('close',()=>{pickCb=null;$('#pasteZone').classList.remove('over')});
+$('#pickFileBtn').onclick=()=>{const f=$('#filePick');f.value='';f.click()};
+$('#pasteZone').onclick=()=>{const f=$('#filePick');f.value='';f.click()};
+$('#pasteZone').addEventListener('dragover',e=>{e.preventDefault();$('#pasteZone').classList.add('over')});
+$('#pasteZone').addEventListener('dragleave',()=>$('#pasteZone').classList.remove('over'));
+$('#pasteZone').addEventListener('drop',e=>{
+  e.preventDefault();$('#pasteZone').classList.remove('over');
+  const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+  if(f&&f.type.startsWith('image/'))finishPickImage(f,'Imagem adicionada!');
+  else toast('Solte um arquivo de imagem.');
 });
+$('#pickPasteBtn').onclick=async()=>{
+  if(!navigator.clipboard||!navigator.clipboard.read){
+    toast('Pressione Ctrl+V no teclado para colar a imagem.');return;
+  }
+  try{
+    const items=await navigator.clipboard.read();
+    for(const item of items){
+      const imgType=item.types.find(t=>t.startsWith('image/'));
+      if(imgType){
+        const blob=await item.getType(imgType);
+        finishPickImage(blob,'Imagem colada!');
+        return;
+      }
+    }
+    toast('Nenhuma imagem encontrada na área de transferência.');
+  }catch(_){
+    toast('Pressione Ctrl+V no teclado para colar a imagem.');
+  }
+};
+$('#filePick').addEventListener('change',e=>{
+  const file=e.target.files&&e.target.files[0];
+  if(!file)return;
+  finishPickImage(file);
+});
+
+function getClipboardImage(e){
+  const cd=e.clipboardData;if(!cd)return null;
+  if(cd.items){
+    for(const item of cd.items){
+      if(item.type&&item.type.startsWith('image/')){
+        const f=item.getAsFile();
+        if(f)return f;
+      }
+    }
+  }
+  if(cd.files){
+    for(const f of cd.files){
+      if(f.type&&f.type.startsWith('image/'))return f;
+    }
+  }
+  return null;
+}
+
+document.addEventListener('paste',e=>{
+  const imgFile=getClipboardImage(e);
+  if(!imgFile)return;
+  e.preventDefault();
+
+  /* 1. Se o diálogo de adicionar imagem estiver aberto, cola direto no destino escolhido */
+  if($('#dlgPickImg').open&&pickCb){
+    finishPickImage(imgFile,'Imagem colada!');
+    return;
+  }
+
+  /* 2. Se outro diálogo estiver aberto ou estiver na Capa, não interfere */
+  if(document.querySelector('dialog[open]')||S.tab==='capa')return;
+
+  /* 3. Ctrl+V direto na página do personagem: detecta onde o cursor está ou usa a galeria */
+  const c=cur();
+  const hover=lastHoverEl&&lastHoverEl.closest?lastHoverEl:null;
+  if(hover&&hover.closest('.medal')){
+    processImageFile(imgFile,500,s=>{c.portrait=s;save();renderPage();toast('Retrato colado!')});
+    return;
+  }
+  const refEl=hover&&hover.closest('.ref[data-ref-i]');
+  if(refEl){
+    const boxEl=refEl.closest('[data-box]'),b=boxEl&&getBox(boxEl.dataset.box),ri=+refEl.dataset.refI;
+    if(b&&b.type==='refs'&&b.data.items[ri]){
+      processImageFile(imgFile,300,s=>{b.data.items[ri].img=s;save();renderBoard();toast('Imagem de referência colada!')});
+      return;
+    }
+  }
+  const boxEl=hover&&hover.closest('[data-box]'),hb=boxEl&&getBox(boxEl.dataset.box);
+  if(hb&&hb.type==='images'){
+    processImageFile(imgFile,700,s=>{hb.data.imgs.push(s);save();renderBoard();toast('Imagem colada em '+hb.title+'!')});
+    return;
+  }
+  const targetGallery=c.boxes.find(b=>b.sec===S.tab&&b.type==='images')||c.boxes.find(b=>b.type==='images');
+  if(targetGallery){
+    processImageFile(imgFile,700,s=>{targetGallery.data.imgs.push(s);save();renderBoard();toast('Imagem colada em '+targetGallery.title+'!')});
+    return;
+  }
+  processImageFile(imgFile,500,s=>{c.portrait=s;save();renderPage();toast('Retrato colado!')});
+});
+
+let confirmCb=null;
+function askConfirm(msg,cb){
+  confirmCb=cb;
+  $('#confirmMsg').textContent=msg;
+  $('#dlgConfirm').showModal();
+}
+$('#confirmOk').onclick=()=>{const cb=confirmCb;confirmCb=null;$('#dlgConfirm').close();if(cb)cb()};
+$('#dlgConfirm').addEventListener('close',()=>{confirmCb=null});
 
 /* ---------- Cliques ---------- */
 document.addEventListener('click',e=>{
@@ -591,13 +756,15 @@ document.addEventListener('click',e=>{
     case 'delc':{
       if(S.chars.length<2){toast('O livro precisa de pelo menos um personagem.');return}
       const src=S.chars.find(x=>x.id===t.dataset.id);
-      if(!src||!confirm('Excluir “'+src.name+'” e todas as suas páginas?'))return;
-      S.chars=S.chars.filter(x=>x.id!==src.id);if(S.current===src.id)S.current=S.chars[0].id;save();renderCover();return}
+      if(!src)return;
+      askConfirm('Excluir “'+src.name+'” e todas as suas páginas?',()=>{
+        S.chars=S.chars.filter(x=>x.id!==src.id);if(S.current===src.id)S.current=S.chars[0].id;save();renderCover();
+      });return}
     case 'sharec':openShare([t.dataset.id]);return;
     case 'sharebook':openShare(S.chars.map(x=>x.id));return;
     case 'importc':openImport();return;
     case 'addbox':$('#dlgAdd').showModal();return;
-    case 'portrait':pickImage(s=>{c.portrait=s;save();renderPage()},500);return;
+    case 'portrait':pickImage(s=>{c.portrait=s;save();renderPage()},500,'Retrato do personagem');return;
     case 'rmportrait':c.portrait='';save();renderPage();return;
     case 'left':case 'right':{
       const a=c.boxes,k=a.indexOf(b);
@@ -608,7 +775,7 @@ document.addEventListener('click',e=>{
       const nx=SEC_ORDER[(SEC_ORDER.indexOf(b.sec)+1)%SEC_ORDER.length];b.sec=nx;save();renderBoard();
       toast('Caixa movida para: '+SECS[nx].tab);return}
     case 'delbox':
-      if(confirm('Excluir a caixa “'+(b.title||'sem título')+'”?')){c.boxes=c.boxes.filter(x=>x!==b);save();renderBoard()}return;
+      askConfirm('Excluir a caixa “'+(b.title||'sem título')+'”?',()=>{c.boxes=c.boxes.filter(x=>x!==b);save();renderBoard()});return;
     case 'fadd':b.data.rows.push({k:'',v:''});save();renderBoard();focusLast(boxEl,'[data-act=fk]');return;
     case 'frm':b.data.rows.splice(i,1);save();renderBoard();return;
     case 'tagadd':addTag(boxEl,b);return;
@@ -620,8 +787,8 @@ document.addEventListener('click',e=>{
     case 'qrm':b.data.items.splice(i,1);if(!b.data.items.length)b.data.items.push('');save();renderBoard();return;
     case 'refadd':b.data.items.push({name:'',src:'',note:'',img:''});save();renderBoard();focusLast(boxEl,'[data-act=rn]');return;
     case 'refrm':b.data.items.splice(i,1);save();renderBoard();return;
-    case 'refimg':pickImage(s=>{b.data.items[i].img=s;save();renderBoard()},300);return;
-    case 'imgadd':pickImage(s=>{b.data.imgs.push(s);save();renderBoard()},700);return;
+    case 'refimg':pickImage(s=>{b.data.items[i].img=s;save();renderBoard()},300,'Imagem de referência');return;
+    case 'imgadd':pickImage(s=>{b.data.imgs.push(s);save();renderBoard()},700,'Adicionar à galeria');return;
     case 'imgrm':e.stopPropagation();b.data.imgs.splice(i,1);save();renderBoard();return;
     case 'zoom':$('#bigImg').src=b.data.imgs[i];$('#dlgImg').showModal();return;
   }
@@ -785,7 +952,7 @@ function cleanChar(c){
 
 /* Lê QUALQUER coisa colada: código novo, vários códigos, backup antigo em JSON, texto de RTF */
 async function parseImport(raw){
-  let text=String(raw||'').replace(/[​-‍﻿]/g,'').trim();
+  let text=String(raw||'').replace(/[-]/g,'').trim();
   if(!text)return {chars:[]};
   if(/^\s*\{\\rtf/.test(text)||text.includes('\\rtf1'))text=rtfToText(text);
   let payloads=[];
@@ -938,54 +1105,127 @@ render(true);
 })();
 </script>
 <script>
+(function(){
   const NOME_SALA = "grimorio_arcana";
   const DB_URL = atob("aHR0cHM6Ly9ncmltb3Jpby1hY2VydG9jcml0aWNvLWRlZmF1bHQtcnRkYi5maXJlYmFzZWlvLmNvbS8=") + NOME_SALA + ".json";
   const CHAVE_DESTA_MESA = NOME_SALA + "_v2";
-  let ultimoJsonEnviado = "";
-  let bloqueado = false;
+  const CLIENT_ID = Math.random().toString(36).slice(2, 10) + "_" + Date.now().toString(36);
 
-  window.salvarNaNuvem = async function(estado) {
-    if (bloqueado) return;
-    const jsonAtual = JSON.stringify(estado);
-    if (jsonAtual === ultimoJsonEnviado) return;
+  let ultimoJsonSincronizado = "";
+  try { ultimoJsonSincronizado = localStorage.getItem(CHAVE_DESTA_MESA) || ""; } catch (e) {}
 
+  let saveTimer = null;
+  let enviando = false;
+  let pendenteReenvio = false;
+  let jsonPendente = null;
+  let ultimaEdicaoLocal = 0;
+
+  async function enviarParaNuvem() {
+    saveTimer = null;
+    if (!jsonPendente || jsonPendente === ultimoJsonSincronizado) return;
+    if (enviando) {
+      pendenteReenvio = true;
+      return;
+    }
+
+    const jsonParaEnviar = jsonPendente;
+    enviando = true;
     try {
       const resposta = await fetch(DB_URL, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pacote: jsonAtual })
+        body: JSON.stringify({
+          pacote: jsonParaEnviar,
+          cliente: CLIENT_ID,
+          atualizadoEm: Date.now()
+        })
       });
 
       if (resposta.ok) {
-        ultimoJsonEnviado = jsonAtual;
+        ultimoJsonSincronizado = jsonParaEnviar;
         console.log("✅ " + NOME_SALA + " salvo na nuvem com todas as caixas intactas!");
       }
     } catch (erro) {
       console.error("❌ Erro ao salvar no Firebase:", erro);
+    } finally {
+      enviando = false;
+      if (pendenteReenvio || (jsonPendente && jsonPendente !== ultimoJsonSincronizado)) {
+        pendenteReenvio = false;
+        saveTimer = setTimeout(enviarParaNuvem, 400);
+      }
     }
+  }
+
+  window.salvarNaNuvem = function(estado) {
+    ultimaEdicaoLocal = Date.now();
+    jsonPendente = JSON.stringify(estado);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(enviarParaNuvem, 900);
   };
 
-  async function verificarNuvem() {
-    if (bloqueado) return;
+  function flushAoSair() {
+    if (!saveTimer || !jsonPendente || jsonPendente === ultimoJsonSincronizado) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
     try {
-      const resposta = await fetch(DB_URL + "?t=" + Date.now());
+      fetch(DB_URL, {
+        method: "PUT",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pacote: jsonPendente,
+          cliente: CLIENT_ID,
+          atualizadoEm: Date.now()
+        })
+      });
+    } catch (e) {}
+  }
+  window.addEventListener("pagehide", flushAoSair);
+  document.addEventListener("visibilitychange", function() {
+    if (document.hidden) flushAoSair();
+  });
+
+  function estaDigitando() {
+    const el = document.activeElement;
+    return !!(el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA"));
+  }
+
+  async function verificarNuvem() {
+    if (document.hidden || enviando || saveTimer !== null) return;
+    if (ultimaEdicaoLocal && (Date.now() - ultimaEdicaoLocal) < 3500) return;
+
+    const inicioCheck = Date.now();
+    try {
+      const resposta = await fetch(DB_URL + "?t=" + inicioCheck);
       if (!resposta.ok) return;
 
       const dadosNuvem = await resposta.json();
       if (!dadosNuvem || typeof dadosNuvem.pacote !== "string") return;
 
+      /* Se houve edição local enquanto a leitura estava em andamento, descarta para evitar rollback */
+      if (enviando || saveTimer !== null || ultimaEdicaoLocal >= inicioCheck) return;
+
       const jsonNuvem = dadosNuvem.pacote;
-      if (jsonNuvem === ultimoJsonEnviado) return;
+      if (dadosNuvem.cliente === CLIENT_ID || jsonNuvem === ultimoJsonSincronizado) {
+        ultimoJsonSincronizado = jsonNuvem;
+        return;
+      }
 
-      const valorLocal = localStorage.getItem(CHAVE_DESTA_MESA);
+      let valorLocal = null;
+      try { valorLocal = localStorage.getItem(CHAVE_DESTA_MESA); } catch (e) {}
 
-      if (valorLocal !== jsonNuvem) {
-        bloqueado = true;
-        ultimoJsonEnviado = jsonNuvem;
-        localStorage.setItem(CHAVE_DESTA_MESA, jsonNuvem);
-        location.reload();
-      } else {
-        ultimoJsonEnviado = jsonNuvem;
+      if (valorLocal === jsonNuvem) {
+        ultimoJsonSincronizado = jsonNuvem;
+        return;
+      }
+
+      /* Não interrompe enquanto o usuário estiver digitando */
+      if (estaDigitando()) return;
+
+      const parsed = JSON.parse(jsonNuvem);
+      ultimoJsonSincronizado = jsonNuvem;
+      if (window.__aplicarEstadoRemoto) {
+        window.__aplicarEstadoRemoto(parsed);
       }
     } catch (erro) {
       console.error("❌ Erro ao ler dados da nuvem:", erro);
@@ -993,7 +1233,8 @@ render(true);
   }
 
   verificarNuvem();
-  setInterval(verificarNuvem, 4000);
+  setInterval(verificarNuvem, 8000);
+})();
 </script>
 </body>
 </html>
